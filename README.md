@@ -30,6 +30,6 @@
   | auto |   int   | char(50) |  datetime |
     
  * Таблица bad_request. Хранит данные о неуспешных запросах и вызванных ошибках:
-|  id  | user_id |   title  | date_time |    error   |
-|------|---------|----------|-----------|------------|
-| auto |   int   | char(50) |  datetime |  char(200) |
+  |  id  | user_id |   title  | date_time |    error   |
+  |------|---------|----------|-----------|------------|
+  | auto |   int   | char(50) |  datetime |  char(200) |
