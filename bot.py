@@ -8,7 +8,7 @@ from telegram.ext import (ApplicationBuilder,
                           ContextTypes,
                           filters,
                           CommandHandler,
-                          MessageHandler, CallbackContext)
+                          MessageHandler)
 
 import database
 
@@ -18,7 +18,7 @@ TELEGRAM_BOT_TOKEN = config['telegram']['bot_token']
 ACTIVATION_CODE = config['activation']['code']
 
 
-def check_user(func):  # Написать тип
+def check_user(func):
     """ Декоратор, проверяющий наличие пользователя в белом листе """
 
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -31,14 +31,18 @@ def check_user(func):  # Написать тип
 
 @check_user
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """ /start """
+    """ /start
+        Вывод приветственной информации
+    """
 
     await update.message.reply_text('Введите название фильма для поиска. '
                                     'Для более точного поиска можете ввести и год выпуска')
 
 
 async def activate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """ /activate """
+    """ /activate
+        Добавляет пользователя в базу данных, для использования бота
+    """
 
     code = context.args[0] if context.args else None
     if code == ACTIVATION_CODE:
@@ -63,7 +67,9 @@ async def activate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 @check_user
 async def my_sub(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """ /my_sub """
+    """ /my_sub
+        Передает информацию о его текущей подписке
+    """
 
     user = update.effective_user
     name, max_request = database.get_sub_user(user)
@@ -74,7 +80,10 @@ async def my_sub(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 @check_user
 async def amount_request_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """ /amount """
+    """ /amount
+        Передает пользователю информацию о его текущем количестве запросов в сутки,
+        а так же максимально доступное количество
+    """
 
     user = update.effective_user
     amount_request = database.amount_request_user(user)
@@ -84,66 +93,83 @@ async def amount_request_user(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 @check_user
 async def buy_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """ /buy """
+    """ /buy
+
+    """
 
     await update.message.reply_text(f'Функционал разрабатывается')
 
 
 @check_user
 async def subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """ /subscriptions
-
+    """ /subscriptions.
+        Передает пользователю информацию о всех доступных подписках
     """
 
-    user = update.effective_user
-    pass
-    # amount_request = database.amount_request_user(user)  # Добавить максю количество запросов
-    await update.message.reply_text(f'')
+    all_subscriptions = database.view_all_sub()
+    text = (f'На данный момент у нас есть 3 типа подписок:\n'
+            f'base: {all_subscriptions["base"]["max_request"]} '
+            f'запросов в сутки | стоимость {all_subscriptions["base"]["price"]} рублей\n'
+            f'medium: {all_subscriptions["medium"]["max_request"]} '
+            f'запросов в сутки | стоимость {all_subscriptions["medium"]["price"]} рублей\n'
+            f'maximum: {all_subscriptions["maximum"]["max_request"]} '
+            f'запросов в сутки | стоимость {all_subscriptions["maximum"]["price"]} рублей\n'
+            f'Узнать статус своей подписки можно /my_sub\n'
+            f'Чтобы купить нужны уровень подписки введите /buy <уровень>')
+    await update.message.reply_text(text)
 
 
 @check_user
 async def search_movie(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """ Обрабатывает сообщения с названием фильма """
 
-    text = update.message.text
-    parts = text.split()  # Разделение на слова
-    if len(parts) >= 2:
-        # Если название имеет хотя бы 2 слова (может быть и без года)
-        title = parts[:-1]
-        year = parts[-1]
-        # Проверка последнего слова, что это год
-        try:
-            if 1900 <= int(year) <= 2025:  # Если это год
-                title = ' '.join(title)
-                answer = await api.search_movie_data(title, year)
-        except ValueError:  # Если это часть названия
+    user = update.effective_user
+    amount_request = database.amount_request_user(user)
+    max_request = database.get_max_request(user)
+    if amount_request >= max_request:
+        await update.message.reply_text('Превышен лимит запросов в сутки.\n'
+                                        'Если хотите больше приобретите статус подписки выше текущей\n'
+                                        '/subscriptions')
+    else:
+        text = update.message.text
+        parts = text.split()  # Разделение на слова
+        if len(parts) >= 2:
+            # Если название имеет хотя бы 2 слова (может быть и без года)
+            title = parts[:-1]
+            year = parts[-1]
+            # Проверка последнего слова, что это год
+            try:
+                if 1900 <= int(year) <= 2025:  # Если это год
+                    title = ' '.join(title)
+                    answer = await api.search_movie_data(title, year)
+            except ValueError:  # Если это часть названия
+                title = text
+                answer = await api.search_movie_data(title)
+        # Если название фильма содержит 1 слова без даты
+        else:
             title = text
             answer = await api.search_movie_data(title)
-    # Если название фильма содержит 1 слова без даты
-    else:
-        title = text
-        answer = await api.search_movie_data(title)
-    if answer["error"] is None:
-        await update.message.reply_text(answer['data'])
-        # Запись в request
-        date_time = datetime.datetime.now()
-        database.add_request(user=update.effective_user,
-                             imdb_id=answer['imdbID'],
-                             date_time=date_time)
-        database.update_last_request(user=update.effective_user, date_time=date_time)
-    else:
-        await update.message.reply_text(answer['error'])
-        # Запись в bad_request
-        date_time = datetime.datetime.now()
-        database.add_bad_request(user=update.effective_user,
-                                 title=text,
-                                 date_time=date_time,
-                                 error=answer['error'])
-        database.update_last_request(user=update.effective_user, date_time=date_time)
+        if answer["error"] is None:
+            await update.message.reply_text(answer['data'])
+            # Запись в request
+            date_time = datetime.datetime.now()
+            database.add_request(user=update.effective_user,
+                                 imdb_id=answer['imdbID'],
+                                 date_time=date_time)
+            database.update_last_request(user=update.effective_user, date_time=date_time)
+        else:
+            await update.message.reply_text(answer['error'])
+            # Запись в bad_request
+            date_time = datetime.datetime.now()
+            database.add_bad_request(user=update.effective_user,
+                                     title=text,
+                                     date_time=date_time,
+                                     error=answer['error'])
+            database.update_last_request(user=update.effective_user, date_time=date_time)
 
-    output = f'[{date_time.strftime("%Y-%m-%d %H:%M:%S")}] | {update.effective_user.id} | ' \
-             f'{title} | {answer["response"]} | {answer["error"]}'
-    print(output)
+        output = f'[{date_time.strftime("%Y-%m-%d %H:%M:%S")}] | {update.effective_user.id} | ' \
+                 f'{title} | {answer["response"]} | {answer["error"]}'
+        print(output)
 
 
 def main() -> None:

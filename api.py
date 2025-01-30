@@ -1,8 +1,9 @@
+""" Логика взаимодействия с api OMDb """
+
 from configparser import ConfigParser
 from typing import Union
 
 import aiohttp
-import asyncio
 
 config = ConfigParser()
 config.read('config.ini')
@@ -12,6 +13,8 @@ url = 'http://www.omdbapi.com/'
 
 
 async def search_movie_data(movie_title: str, year: Union[str, None] = 'empty') -> dict:  # в 3.9 нет |
+    """ Запрос к api для получения информации о фильме """
+
     params = {
         't': movie_title,  # i по айди фильма
         'apikey': API_TOKEN,
@@ -43,6 +46,7 @@ async def search_movie_data(movie_title: str, year: Union[str, None] = 'empty') 
 
 def convert_to_txt(data: dict) -> str:
     """ Форматирование в текстовый вид """
+
     imd = 'N/A'
     rotten_tomatos = 'N/A'
     metacritic = 'N/A'
@@ -50,7 +54,7 @@ def convert_to_txt(data: dict) -> str:
         imd = data['Ratings'][0]['Value']
         rotten_tomatos = data['Ratings'][1]['Value']
         metacritic = data['Ratings'][2]['Value']
-    except IndexError as e:
+    except IndexError as _:
         pass
 
     text = (

@@ -1,7 +1,6 @@
 """ Логика работы с базой данных Postgresql """
 
 from sqlalchemy import create_engine, Column, Integer, String, BigInteger, DateTime, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from datetime import datetime, timedelta
 from configparser import ConfigParser
@@ -144,20 +143,17 @@ def add_bad_request(user: _user, title, date_time: datetime, error: str) -> BadR
 
     with session_local() as db_sess:
         user_in_table = db_sess.query(User).filter(User.user_telegram_id == user.id).first()
-        if user is None:
-            print('Получилась фигня')  # Обработать ошибку, если пользователя все таки нет в белом листе
-        else:
-            request = BadRequest(user_id=user_in_table.id,
-                                 title=title,
-                                 date_time=date_time,
-                                 error=error)
-            db_sess.add(request)
-            db_sess.commit()
-            db_sess.refresh(request)
-            return request
+        request = BadRequest(user_id=user_in_table.id,
+                             title=title,
+                             date_time=date_time,
+                             error=error)
+        db_sess.add(request)
+        db_sess.commit()
+        db_sess.refresh(request)
+        return request
 
 
-def update_last_request(user: _user.User, date_time):
+def update_last_request(user: _user, date_time: datetime) -> None:
     """ Обновление поля last_request у user """
 
     with session_local() as db_sess:
@@ -173,14 +169,32 @@ def session_local() -> Session:
     return session()
 
 
-def view_all_sub():
+def view_all_sub() -> dict:
+    """ Все доступные подписки """
+
     with session_local() as sess:
         subs = sess.query(Subscription).all()
+        subs_dict = {}
         for sub in subs:
-            print(sub.id, sub.name, sub.max_request, sub.price)
+            subs_dict[sub.name] = {
+                'max_request': sub.max_request,
+                'price': sub.price
+            }
+    return subs_dict
 
 
-def get_sub_user(user: _user.User) -> tuple:
+def get_max_request(user: _user) -> int:
+    """ Максимальное количество запросов в сутки пользователя """
+
+    with session_local() as sess:
+        user, subscription = (sess.query(User, Subscription)
+                              .join(Subscription, User.subscription == Subscription.id)
+                              .filter(User.user_telegram_id == user.id)
+                              .first())
+        return subscription.max_request
+
+
+def get_sub_user(user: _user) -> tuple:
     """ Информация о подписке пользователя """
 
     with session_local() as sess:
@@ -191,7 +205,7 @@ def get_sub_user(user: _user.User) -> tuple:
         return subscription.name, subscription.max_request
 
 
-def amount_request_user(user: _user.User):  # user: _user.User
+def amount_request_user(user: _user) -> int:
     """ Информация о количестве запросов пользователя за эти сутки """
 
     with session_local() as sess:
@@ -203,7 +217,7 @@ def amount_request_user(user: _user.User):  # user: _user.User
         return amount_request
 
 
-def amount_request_for_day():
+def amount_request_for_day() -> int:
     """ Количество выполненных запросов за сутки """
 
     with session_local() as sess:
@@ -212,8 +226,3 @@ def amount_request_for_day():
                   .filter(Request.date_time >= time_threshold)
                   .count())
         return amount
-
-# create_tables()
-# view_all_sub()
-# print(get_sub_user())
-# print(amount_request_user(447910931))
