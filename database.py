@@ -1,7 +1,9 @@
+""" Логика работы с базой данных Postgresql """
+
 from sqlalchemy import create_engine, Column, Integer, String, BigInteger, DateTime, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
-from datetime import datetime
+from datetime import datetime, timedelta
 from configparser import ConfigParser
 from telegram import _user
 
@@ -19,17 +21,52 @@ Base = declarative_base()
 
 
 class User(Base):
-    """ Таблица user """
+    """ Таблица user.
+        Хранит информацию об авторизированных пользователях:
+            - Телеграм id
+            - Username
+            - Время последнего запроса
+            - Уровень подписки
+    """
 
     __tablename__ = 'user'
     id = Column(Integer, primary_key=True)
     user_telegram_id = Column(BigInteger, nullable=False)
     last_request = Column(DateTime, nullable=True)
     username = Column(String(255), nullable=True)
+    subscription = Column(Integer, ForeignKey('subscription.id'))
+
+
+# class Transaction(Base):
+#     """ Таблица transaction.
+#         Хранит информацию об транзакциях:
+#     """
+#
+#     pass
+
+
+class Subscription(Base):
+    """ Таблица subscription.
+        Хранит информацию о подписках:
+            - Название
+            - Количество максимальных запросов
+            - Цена в рублях
+    """
+
+    __tablename__ = 'subscription'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(20))
+    max_request = Column(Integer)
+    price = Column(Integer)
 
 
 class Request(Base):
-    """ Таблица request, содержащая запросы выполненные корректно """
+    """ Таблица request.
+        Содержит информацию о запросах, выполненных корректно:
+            - user id из таблицы user
+            - imdbID запрашиваемого фильма
+            - Дата и время запроса
+    """
 
     __tablename__ = 'request'
     id = Column(Integer, primary_key=True)
@@ -39,7 +76,13 @@ class Request(Base):
 
 
 class BadRequest(Base):
-    """ Таблица bad_request, содержащая запросы выполненные с ошибками"""
+    """ Таблица bad_request.
+        Содержит информацию о запросах, выполненных с ошибками:
+        - user id из таблицы user
+        - Текст запроса
+        - Дата и время запроса
+        - Полученные ошибки
+    """
 
     __tablename__ = 'bad_request'
     id = Column(Integer, primary_key=True)
@@ -64,7 +107,8 @@ def add_user_whitelist(db: Session, user: _user,  last_request: datetime = None)
 
     new_user = User(user_telegram_id=user.id,
                     last_request=last_request,
-                    username=user.username)
+                    username=user.username,
+                    subscription=1)  # Возможно поменять
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -127,3 +171,49 @@ def session_local() -> Session:
 
     session = sessionmaker(bind=engine)
     return session()
+
+
+def view_all_sub():
+    with session_local() as sess:
+        subs = sess.query(Subscription).all()
+        for sub in subs:
+            print(sub.id, sub.name, sub.max_request, sub.price)
+
+
+def get_sub_user(user: _user.User) -> tuple:
+    """ Информация о подписке пользователя """
+
+    with session_local() as sess:
+        user, subscription = (sess.query(User, Subscription)
+                              .join(Subscription, User.subscription == Subscription.id)
+                              .filter(User.user_telegram_id == user.id)
+                              .first())
+        return subscription.name, subscription.max_request
+
+
+def amount_request_user(user: _user.User):  # user: _user.User
+    """ Информация о количестве запросов пользователя за эти сутки """
+
+    with session_local() as sess:
+        time_threshold = datetime.now() - timedelta(days=1)
+        user = sess.query(User).filter(User.user_telegram_id == user.id).first()
+        amount_request = sess.query(Request).filter(Request.user_id == user.id,
+                                                    Request.date_time >= time_threshold
+                                                    ).count()
+        return amount_request
+
+
+def amount_request_for_day():
+    """ Количество выполненных запросов за сутки """
+
+    with session_local() as sess:
+        time_threshold = datetime.now() - timedelta(days=1)
+        amount = (sess.query(Request)
+                  .filter(Request.date_time >= time_threshold)
+                  .count())
+        return amount
+
+# create_tables()
+# view_all_sub()
+# print(get_sub_user())
+# print(amount_request_user(447910931))
