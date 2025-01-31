@@ -1,9 +1,11 @@
 """ Логика взаимодействия с api OMDb """
-
+import asyncio
+import time
 from configparser import ConfigParser
 from typing import Union
 
 import aiohttp
+import mparser
 
 config = ConfigParser()
 config.read('config.ini')
@@ -79,3 +81,29 @@ def convert_to_txt(data: dict) -> str:
     )
 
     return text
+
+
+async def get_random_film():
+    """ Выдает информацию о случайном фильме """
+
+    # title = mparser.parse_movie_info()
+    # info = await search_movie_data(title)
+    # if info['error'] is not None:
+    #     time.sleep(1)
+    #     # Запустить снова get_random_film
+    # return info
+    while True:  # Цикл для повторных попыток
+        title = mparser.parse_movie_info()  # Получаем случайное название фильма
+        info = await search_movie_data(title)  # Ищем информацию о фильме
+
+        if info['error'] is not None:
+            print('Повторяю попытку')
+            # Задержка перед повторной попыткой
+            await asyncio.sleep(1)  # Используем await для асинхронного ожидания
+            continue  # Если произошла ошибка, повторяем попытку
+
+        # Если ошибок нет, возвращаем информацию о фильме
+        return info
+
+# a = asyncio.run(get_random_film())
+# print(a)

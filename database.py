@@ -1,6 +1,6 @@
 """ Логика работы с базой данных Postgresql """
 
-from sqlalchemy import create_engine, Column, Integer, String, BigInteger, DateTime, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, BigInteger, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from datetime import datetime, timedelta
 from configparser import ConfigParser
@@ -26,6 +26,7 @@ class User(Base):
             - Username
             - Время последнего запроса
             - Уровень подписки
+            - разрешение рассылки
     """
 
     __tablename__ = 'user'
@@ -34,6 +35,7 @@ class User(Base):
     last_request = Column(DateTime, nullable=True)
     username = Column(String(255), nullable=True)
     subscription = Column(Integer, ForeignKey('subscription.id'))
+    mailing = Column(Boolean, default=False)
 
 
 # class Transaction(Base):
@@ -160,6 +162,16 @@ def update_last_request(user: _user, date_time: datetime) -> None:
         user = db_sess.query(User).filter(User.user_telegram_id == user.id).first()
         user.last_request = date_time
         db_sess.commit()
+
+
+def update_user_mailing(user: _user) -> bool:
+    """ Обновление поля last_request у user """
+
+    with session_local() as db_sess:
+        user = db_sess.query(User).filter(User.user_telegram_id == user.id).first()
+        user.mailing = not user.mailing
+        db_sess.commit()
+        return user.mailing
 
 
 def session_local() -> Session:

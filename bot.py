@@ -26,6 +26,10 @@ def check_user(func):
             return await func(update, context)
         else:
             await update.message.reply_text('Для доступа к боту, отправьте команду /activate <код>')
+            date_time = datetime.datetime.now()
+            output = f'[{date_time.strftime("%Y-%m-%d %H:%M:%S")}] | {update.effective_user.id} | ' \
+                     f'Запрос неавторизованного пользователя'
+            print(output)
     return wrapper
 
 
@@ -37,6 +41,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     await update.message.reply_text('Введите название фильма для поиска. '
                                     'Для более точного поиска можете ввести и год выпуска')
+    date_time = datetime.datetime.now()
+    output = f'[{date_time.strftime("%Y-%m-%d %H:%M:%S")}] | {update.effective_user.id} | ' \
+             f'/start'
+    print(output)
 
 
 async def activate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -51,18 +59,26 @@ async def activate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             db_sess = database.session_local()
             try:
                 database.add_user_whitelist(db_sess, user)
+                output = 'success'
                 await update.message.reply_text('Успешно активировано!\n'
                                                 'Введите название фильма для поиска')
             except Exception as _:
+                output = 'success & error'
                 await update.message.reply_text('Успешно активировано, но не удалось получить данные о пользователе!')
             finally:
                 db_sess.close()
         else:
+            output = 'repeat'
             await update.message.reply_text('Вы уже имеете доступ к боту.'
                                             'Введите название фильма для поиска'
                                             )
     else:
+        output = 'Invalid activation code'
         await update.message.reply_text(f'Неверный код активации')
+    date_time = datetime.datetime.now()
+    output = f'[{date_time.strftime("%Y-%m-%d %H:%M:%S")}] | {update.effective_user.id} | ' \
+             f'/activate | Вывод: {output}'
+    print(output)
 
 
 @check_user
@@ -76,6 +92,10 @@ async def my_sub(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(f'Статус подписки: {name}\n'
                                     f'Количество возможных запросов: {max_request}\n'
                                     'Посмотреть количество текущих запросов: /amount')
+    date_time = datetime.datetime.now()
+    output = f'[{date_time.strftime("%Y-%m-%d %H:%M:%S")}] | {update.effective_user.id} | ' \
+             f'/my_sub'
+    print(output)
 
 
 @check_user
@@ -89,15 +109,44 @@ async def amount_request_user(update: Update, context: ContextTypes.DEFAULT_TYPE
     amount_request = database.amount_request_user(user)
     max_request = database.get_max_request(user)
     await update.message.reply_text(f'Количество запросов в сутки {amount_request}/{max_request}')
+    date_time = datetime.datetime.now()
+    output = f'[{date_time.strftime("%Y-%m-%d %H:%M:%S")}] | {update.effective_user.id} | ' \
+             f'/amount'
+    print(output)
 
 
 @check_user
 async def buy_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """ /buy
-
     """
 
     await update.message.reply_text(f'Функционал разрабатывается')
+    date_time = datetime.datetime.now()
+    output = f'[{date_time.strftime("%Y-%m-%d %H:%M:%S")}] | {update.effective_user.id} | ' \
+             f'/buy'
+    print(output)
+
+
+# @check_user
+# async def random_film(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+#     """ /random_film
+#
+#     """
+#     answer = await api.get_random_film()
+#     await update.message.reply_text(answer['data'])
+
+@check_user
+async def on_off_mailing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """ /on_off_mailing
+    """
+    user = update.effective_user
+    status = database.update_user_mailing(user)
+    await update.message.reply_text(f'Статус вашей рассылки: {status}')
+    date_time = datetime.datetime.now()
+    output = f'[{date_time.strftime("%Y-%m-%d %H:%M:%S")}] | {update.effective_user.id} | ' \
+             f'Изменение рассылки | Текущая: {status}'
+    print(output)
+
 
 
 @check_user
@@ -117,6 +166,10 @@ async def subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             f'Узнать статус своей подписки можно /my_sub\n'
             f'Чтобы купить нужны уровень подписки введите /buy <уровень>')
     await update.message.reply_text(text)
+    date_time = datetime.datetime.now()
+    output = f'[{date_time.strftime("%Y-%m-%d %H:%M:%S")}] | {update.effective_user.id} | ' \
+             f'/subscriptions'
+    print(output)
 
 
 @check_user
@@ -182,12 +235,14 @@ def main() -> None:
     subscriptions_handler = CommandHandler('subscriptions', subscriptions)
     buy_subscriptions_handler = CommandHandler('buy', buy_subscription)
     my_sub_handler = CommandHandler('my_sub', my_sub)
+    on_off_mailing_handler = CommandHandler('on_off_mailing', on_off_mailing)
     amount_request_user_handler = CommandHandler('amount', amount_request_user)
     search_movie_handler = MessageHandler(filters.TEXT & ~filters.COMMAND, search_movie)
 
     application.add_handler(start_handler)
     application.add_handler(activate_handler)
     application.add_handler(my_sub_handler)
+    application.add_handler(on_off_mailing_handler)
     application.add_handler(subscriptions_handler)
     application.add_handler(buy_subscriptions_handler)
     application.add_handler(amount_request_user_handler)
