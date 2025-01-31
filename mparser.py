@@ -1,9 +1,12 @@
+from typing import Union
+
 import requests
 from bs4 import BeautifulSoup
 
 
-def parse_movie_info():
+def parse_movie_info() -> Union[str, None]:
     """ Получить название случайного фильма из randomfilm """
+
     url = "https://randomfilm.ru/"
     response = requests.get(url)
 
