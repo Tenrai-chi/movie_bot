@@ -1,4 +1,5 @@
 """ Логика взаимодействия с api OMDb """
+
 import asyncio
 import time
 from configparser import ConfigParser
