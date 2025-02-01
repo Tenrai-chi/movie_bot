@@ -34,7 +34,8 @@ async def search_movie_data(movie_title: str, year: Union[str, None] = 'empty') 
                         'data': convert_to_txt(data),
                         'imdbID': data['imdbID'],
                         'response': True,
-                        'error': None
+                        'error': None,
+                        'poster': data['Poster']
                     }
                     return answer
                 else:
@@ -86,24 +87,18 @@ def convert_to_txt(data: dict) -> str:
 async def get_random_film():
     """ Выдает информацию о случайном фильме """
 
-    # title = mparser.parse_movie_info()
-    # info = await search_movie_data(title)
-    # if info['error'] is not None:
-    #     time.sleep(1)
-    #     # Запустить снова get_random_film
-    # return info
     while True:  # Цикл для повторных попыток
         title = mparser.parse_movie_info()  # Получаем случайное название фильма
         info = await search_movie_data(title)  # Ищем информацию о фильме
-
-        if info['error'] is not None:
-            print('Повторяю попытку')
-            # Задержка перед повторной попыткой
+        poster = info.get('poster', None)
+        if poster is None:
+            print('Повторяю попытку, нет постера')
             await asyncio.sleep(1)  # Используем await для асинхронного ожидания
             continue  # Если произошла ошибка, повторяем попытку
 
-        # Если ошибок нет, возвращаем информацию о фильме
-        return info
+        if info['error'] is not None:
+            print('Повторяю попытку, фильм не найден')
+            await asyncio.sleep(1)
+            continue
 
-# a = asyncio.run(get_random_film())
-# print(a)
+        return info

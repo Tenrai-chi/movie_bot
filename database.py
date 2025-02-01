@@ -105,11 +105,12 @@ def create_tables() -> None:
 
 def add_user_whitelist(db: Session, user: _user,  last_request: datetime = None) -> User:  # user тип
     """ Добавление пользователя в белый лист """
-
+    info_sub = get_info_sub('base')
     new_user = User(user_telegram_id=user.id,
                     last_request=last_request,
                     username=user.username,
-                    subscription=1)  # Возможно поменять
+                    subscription=info_sub.id,
+                    mailing=False)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -238,3 +239,20 @@ def amount_request_for_day() -> int:
                   .filter(Request.date_time >= time_threshold)
                   .count())
         return amount
+
+
+def get_info_sub(name: str) -> Subscription:
+    """ Выдает информацию о подписке по ее названию """
+
+    with session_local() as sess:
+        info = sess.query(Subscription).filter(Subscription.name == name).first()
+        return info
+
+
+def users_id_with_mailing() -> list:
+    """ Выводит список telegram id пользователей у которых есть рассылка """
+
+    with session_local() as sess:
+        users = sess.query(User).filter(User.mailing == True)
+    users_id = [user.user_telegram_id for user in users]
+    return users_id

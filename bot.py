@@ -1,5 +1,5 @@
 """  Основная логика работы телеграм бота """
-
+import pytz
 import api
 import datetime
 from configparser import ConfigParser
@@ -8,14 +8,14 @@ from telegram.ext import (ApplicationBuilder,
                           ContextTypes,
                           filters,
                           CommandHandler,
-                          MessageHandler)
-
+                          MessageHandler, CallbackContext)
 import database
 
 config = ConfigParser()
 config.read('config.ini')
 TELEGRAM_BOT_TOKEN = config['telegram']['bot_token']
 ACTIVATION_CODE = config['activation']['code']
+moscow_tz = pytz.timezone('Europe/Moscow')
 
 
 def check_user(func):
@@ -62,9 +62,9 @@ async def activate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 output = 'success'
                 await update.message.reply_text('Успешно активировано!\n'
                                                 'Введите название фильма для поиска')
-            except Exception as _:
-                output = 'success & error'
-                await update.message.reply_text('Успешно активировано, но не удалось получить данные о пользователе!')
+            except Exception as e:
+                output = e
+                await update.message.reply_text('Произошла ошибка, обратитесь к разработчику')
             finally:
                 db_sess.close()
         else:
@@ -127,13 +127,18 @@ async def buy_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     print(output)
 
 
-# @check_user
-# async def random_film(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-#     """ /random_film
-#
-#     """
-#     answer = await api.get_random_film()
-#     await update.message.reply_text(answer['data'])
+@check_user
+async def random_film(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """ /random_film
+
+    """
+    answer = await api.get_random_film()
+    await update.message.reply_text(answer['data'])
+    date_time = datetime.datetime.now()
+    output = f'[{date_time.strftime("%Y-%m-%d %H:%M:%S")}] | {update.effective_user.id} | ' \
+             f'/random_film'
+    print(output)
+
 
 @check_user
 async def on_off_mailing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -225,6 +230,37 @@ async def search_movie(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         print(output)
 
 
+async def mailing_for_user(context: CallbackContext):
+    """ Отправляет пользователям, у которых включена рассылка случайный фильм """
+
+    users_id = database.users_id_with_mailing()
+    film = await api.get_random_film()
+    for telegram_id in users_id:
+        await context.bot.send_message(telegram_id, film['data'])
+
+
+def setup_scheduler(application):
+    """ Настраивает JobQueue для отправки сообщений """
+
+    job_queue = application.job_queue
+    message_times = [
+        datetime.time(12, 0),
+        datetime.time(15, 0),
+        datetime.time(18, 0),
+        # test
+        datetime.time(18, 57),
+        datetime.time(18, 58),
+        datetime.time(18, 59),
+    ]
+
+    for time in message_times:
+        job_queue.run_daily(
+            mailing_for_user,
+            time=datetime.time(hour=time.hour, minute=time.minute, tzinfo=moscow_tz),
+            days=(0, 1, 2, 3, 4, 5, 6),
+        )
+
+
 def main() -> None:
     """ Запуск бота """
 
@@ -237,6 +273,7 @@ def main() -> None:
     my_sub_handler = CommandHandler('my_sub', my_sub)
     on_off_mailing_handler = CommandHandler('on_off_mailing', on_off_mailing)
     amount_request_user_handler = CommandHandler('amount', amount_request_user)
+    random_film_handler = CommandHandler('random_film', random_film)
     search_movie_handler = MessageHandler(filters.TEXT & ~filters.COMMAND, search_movie)
 
     application.add_handler(start_handler)
@@ -245,11 +282,14 @@ def main() -> None:
     application.add_handler(on_off_mailing_handler)
     application.add_handler(subscriptions_handler)
     application.add_handler(buy_subscriptions_handler)
+    application.add_handler(random_film_handler)
     application.add_handler(amount_request_user_handler)
     application.add_handler(search_movie_handler)
 
+    setup_scheduler(application)  # Запуск планировщика
     application.run_polling()
 
 
 if __name__ == '__main__':
     main()
+
